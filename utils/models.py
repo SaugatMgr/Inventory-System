@@ -24,10 +24,10 @@ class CommonInfo(models.Model):
         abstract = True
         
 class Address(models.Model):
-    zip_code = models.IntegerField(blank=True, null=True)
-    city = models.CharField(max_length=50, blank=False, default="Lalitpur")
     country = models.CharField(max_length=50, default="Nepal")
+    city = models.CharField(max_length=50, blank=False, default="Kathmandu")
     street = models.CharField(max_length=50,blank=True, null=True)
+    zip_code = models.IntegerField(blank=True, null=True)
     
     class Meta:
         abstract=True
