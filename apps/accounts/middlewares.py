@@ -4,7 +4,4 @@ class CustomMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        
-        print("Custom Middleware Called")
-
         return response
