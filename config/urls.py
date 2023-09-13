@@ -24,6 +24,7 @@ from rest_framework_simplejwt.views import (
 )
 
 from apps.accounts.routers import router as account_router
+from apps.accounts.views import RegisterUserViewSet
 
 router = DefaultRouter()
 
@@ -40,4 +41,5 @@ urlpatterns = [
     path('api/token/verify/', TokenVerifyView.as_view(), name="token_verify"),
     # Local App urls
     path('api/', include(router.urls)),
+    path("api/register/", RegisterUserViewSet.as_view(), name="register_user")
 ]
