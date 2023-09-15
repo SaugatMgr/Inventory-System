@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "pyotp",
     # Local Apps
     "apps.accounts",
+    "apps.products",
 ]
 
 MIDDLEWARE = [
