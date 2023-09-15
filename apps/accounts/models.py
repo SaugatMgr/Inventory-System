@@ -8,7 +8,10 @@ from apps.accounts.constant import (
     ROLE_CHOICES,
     CUSTOMER_GROUP_CHOICES,
 )
-from apps.accounts.utils import (
+from apps.products.models import (
+    Warehouse
+)
+from utils.validation_for_phone_number import (
     validate_mobile_number,
     valid_emails,
 )
@@ -35,6 +38,10 @@ class User(AbstractUser):
         max_length=20,
         choices=ROLE_CHOICES,
     )
+
+    otp = models.CharField(null=True, blank=True, max_length=6)
+    otp_used = models.BooleanField(default=False)
+
     profile_image = models.ImageField(
         upload_to="profile/", blank=True, null=True)
 
@@ -58,9 +65,9 @@ class Supplier(CommonInfo, Address):
 
 class Customer(CommonInfo, Address):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    supplier_name = models.ForeignKey(
+    supplier_name = models.ManyToManyField(
         Supplier,
-        on_delete=models.CASCADE,
+        related_name="consumers"
     )
     customer_group = models.CharField(
         max_length=10, choices=CUSTOMER_GROUP_CHOICES)
@@ -68,17 +75,6 @@ class Customer(CommonInfo, Address):
 
     def __str__(self):
         return self.created_by.full_name
-
-
-class Warehouse(CommonInfo, Address):
-    name = models.CharField(max_length=100, blank=True)
-    phone = models.CharField(
-        max_length=15, null=False, unique=True, validators=[validate_mobile_number]
-    )
-    email = models.EmailField(unique=True)
-
-    def __str__(self):
-        return self.name
 
 
 class Biller(CommonInfo, Address):
