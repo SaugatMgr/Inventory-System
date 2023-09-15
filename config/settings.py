@@ -60,6 +60,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.accounts.middlewares.CustomMiddleware",
+    "utils.threads.RequestMiddleware",
 ]
 
 REST_FRAMEWORK = {
