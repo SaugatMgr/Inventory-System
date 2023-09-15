@@ -1,4 +1,13 @@
 from django.db import models
+
+from apps.products.constant import (
+    PRODUCT_TYPE_CHOICES,
+    PRODUCT_TAX,
+    TAX_METHOD,
+    BARCODE_PAPER_SIZE,
+)
+
+from utils.threads import get_request
 from utils.models import (
     CommonInfo,
     Address,
@@ -6,19 +15,6 @@ from utils.models import (
 from utils.validation_for_phone_number import (
     validate_mobile_number
 )
-
-from django.db import models
-from apps.products.constant import (
-    PRODUCT_TYPE_CHOICES,
-    PRODUCT_TAX,
-    TAX_METHOD,
-    BARCODE_PAPER_SIZE,
-)
-from utils.models import CommonInfo
-from apps.accounts.models import User
-
-from utils.threads import get_request
-# Create your models here.
 
 
 class Brand(CommonInfo):
@@ -30,25 +26,26 @@ class Brand(CommonInfo):
         return self.brand_name
 
 
-
 class Category(models.Model):
-        
+
     name = models.CharField(max_length=64)
+
     class Meta:
         verbose_name = "Category"
         verbose_name_plural = "Categories"
-        
+
     def __str__(self):
         return self.name
-    
+
 
 class SubCategory(models.Model):
-        
+
     name = models.CharField(max_length=64)
     category = models.ForeignKey(
         Category,
         on_delete=models.CASCADE
     )
+
     class Meta:
         verbose_name = "Sub Category"
         verbose_name_plural = "Sub Categories"
@@ -103,7 +100,7 @@ class Product(CommonInfo):
     price_difference_in_warehouse = models.BooleanField(default=True)
     warehouse = models.ManyToManyField(Warehouse)
     user = models.ForeignKey(
-        User,
+        "accounts.User",
         on_delete=models.SET_NULL,
         null=True,
         related_name="product_user"
