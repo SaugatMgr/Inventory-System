@@ -25,10 +25,12 @@ from rest_framework_simplejwt.views import (
 
 from apps.accounts.routers import router as account_router
 from apps.accounts.views import RegisterUserViewSet
+from apps.products.routers import router as product_router
 
 router = DefaultRouter()
 
 router.registry.extend(account_router.registry)
+router.registry.extend(product_router.registry)
 
 urlpatterns = [
     # Admin urls
