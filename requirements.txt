@@ -17,6 +17,7 @@ Pillow==10.0.0
 psycopg2==2.9.7
 PyJWT==2.8.0
 pyotp==2.9.0
+python-barcode==0.15.1
 python-decouple==3.8
 pytz==2023.3.post1
 PyYAML==6.0.1
