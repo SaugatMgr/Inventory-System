@@ -172,7 +172,7 @@ class BarcodeViewSet(ModelViewSet):
 
         unique_filename = f"barcode_{uuid.uuid4()}"
 
-        directory_path = "barcode-image/"
+        directory_path = "media/barcode-image/"
         if not os.path.exists(directory_path):
             os.makedirs(directory_path)
         barcode_image = code.save(f"barcode-image/{unique_filename}")

@@ -128,7 +128,7 @@ class Barcode(CommonInfo):
     information = models.OneToOneField(
         Product, on_delete=models.CASCADE, related_name="barcode_info"
     )
-    barcode_image = models.ImageField(upload_to="barcode-image/", blank=True, null=True)
+    barcode_image = models.ImageField(upload_to="media/barcode-image/", blank=True, null=True)
     papersize = models.CharField(choices=BARCODE_PAPER_SIZE, max_length=20)
 
 
