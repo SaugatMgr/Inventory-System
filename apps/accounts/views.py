@@ -1,6 +1,5 @@
 from django.shortcuts import get_object_or_404
 from rest_framework.viewsets import ModelViewSet
-from rest_framework import serializers
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
@@ -57,14 +56,6 @@ class UserViewSet(CommonModelViewset):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["full_name", ]
 
-    # edit_methods = ("POST", "PUT", "PATCH", "DELETE")
-
-    # def get_permissions(self):
-    #     if self.request.method in self.edit_methods:
-    #         return [permissions.IsAdminUser()]
-    #     else:
-    #         return [permissions.IsAuthenticated()]
-
     permission_classes_by_action = {
         "list": [IsAuthenticated],
         "create": [IsAdminUser],
@@ -120,6 +111,23 @@ class CustomerViewSet(CommonModelViewset):
     queryset = Customer.objects.all()
     serializer_class = CustomerSerializer
 
+    permission_classes_by_action = {
+        "list": [IsAuthenticated],
+        "create": [IsAdminUser],
+        "retrieve": [IsAdminUser],
+        "patch": [IsAdminUser],
+        "destroy": [IsAdminUser],
+    }
+
+    def get_permissions(self):
+        try:
+            return [
+                permission()
+                for permission in self.permission_classes_by_action[self.action]
+            ]
+        except:
+            return [permission() for permission in self.permission_classes]
+
     def get_serializer_class(self):
         if self.action == "retrieve":
             return GetCustomerSerializer
@@ -129,7 +137,23 @@ class CustomerViewSet(CommonModelViewset):
 class SupplierViewSet(CommonModelViewset):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
-    # permission_classes = [SupplierPermission]
+
+    permission_classes_by_action = {
+        "list": [IsAuthenticated],
+        "create": [IsAdminUser],
+        "retrieve": [IsAdminUser | IsSupplierPermission],
+        "patch": [IsAdminUser],
+        "destroy": [IsAdminUser],
+    }
+
+    def get_permissions(self):
+        try:
+            return [
+                permission()
+                for permission in self.permission_classes_by_action[self.action]
+            ]
+        except:
+            return [permission() for permission in self.permission_classes]
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -148,9 +172,25 @@ class BillerViewSet(CommonModelViewset):
     queryset = Biller.objects.all()
     serializer_class = BillerSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter,]
-
     filterset_fields = ["user", ]
     search_fields = ['user__full_name']
+
+    permission_classes_by_action = {
+        "list": [IsAuthenticated],
+        "create": [IsAdminUser],
+        "retrieve": [IsAdminUser],
+        "patch": [IsAdminUser],
+        "destroy": [IsAdminUser],
+    }
+
+    def get_permissions(self):
+        try:
+            return [
+                permission()
+                for permission in self.permission_classes_by_action[self.action]
+            ]
+        except:
+            return [permission() for permission in self.permission_classes]
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -168,28 +208,32 @@ class BillerViewSet(CommonModelViewset):
 class WarehouseViewSet(CommonModelViewset):
     queryset = Warehouse.objects.all()
     serializer_class = WarehouseSerializer
-
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['^name']
     ordering_fields = ['name', 'email']
 
-    def validation(self, data):
-        if len(data.get('name')) < 3:
-            error_message = {
-                'name': 'This field should have more than 3 chars.'}
-            raise serializers.ValidationError(error_message)
-        return True
+    permission_classes_by_action = {
+        "list": [IsAuthenticated],
+        "create": [IsAdminUser],
+        "retrieve": [IsAdminUser],
+        "patch": [IsAdminUser],
+        "destroy": [IsAdminUser],
+    }
 
-    def perform_create(self, serializer):
-        if self.validation(serializer.validated_data):
-            serializer.save()
-
+    def get_permissions(self):
+        try:
+            return [
+                permission()
+                for permission in self.permission_classes_by_action[self.action]
+            ]
+        except:
+            return [permission() for permission in self.permission_classes]
 
 
 def generate_otp():
     secret_key = pyotp.random_base32()
     otp = pyotp.TOTP(secret_key)
-    
+
     return otp.now()
 
 
@@ -198,7 +242,6 @@ class ForgotPasswordViewSet(ModelViewSet):
     serializer_class = PasswordResetRequestSerializer
     permission_classes = [AllowAny]
 
-    
     def get_serializer_class(self):
         if self.action == "reset_password":
             return ForgotPasswordSerializer
@@ -216,9 +259,9 @@ class ForgotPasswordViewSet(ModelViewSet):
         otp = generate_otp()
         user.otp = otp
         user.save()
-        
+
         reset_password_url = f"http://127.0.0.1:8000/api/forgot-password/{user.id}/reset-password/"
-        
+
         send_otp_email(user.email, reset_password_url, otp)
 
         return Response({"success": "Email has been sent successfully", "data": {"email": user.id}}, status=status.HTTP_201_CREATED)
@@ -227,7 +270,7 @@ class ForgotPasswordViewSet(ModelViewSet):
     def reset_password(self, request, pk=None):
 
         user = get_object_or_404(User, id=pk)
-        
+
         forgot_password_serializer = ForgotPasswordSerializer(
             data=request.data, context={'user': user})
         forgot_password_serializer.is_valid(raise_exception=True)
