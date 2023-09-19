@@ -1,3 +1,7 @@
+import os
+import uuid
+import barcode
+from barcode.writer import ImageWriter
 from rest_framework.viewsets import ModelViewSet
 from rest_framework import filters
 from rest_framework.response import Response
@@ -10,12 +14,26 @@ from apps.products.models import (
     Product,
     Unit,
     Warehouse,
+    Barcode,
+    Purchase,
+    Sales,
+    PurchaseInvoice,
+    # SalesInvoice,
+    Adjustment,
 )
 from apps.products.serializers import (
+    AdjustmentSerializer,
+    BarcodeSerializer,
     BrandSerializers,
     CategorySerializer,
+    GetAdjustmentSeralizer,
+    GetBarcodeSerializer,
+    GetPurachseSerializer,
     ProductSerializer,
     GETProductSerializer,
+    PurchaseInvoiceSerializer,
+    PurchaseSerializer,
+    SalesSerializer,
     UnitSerializer,
     GetCategorySeralizer,
     GetUnitSeralizer,
@@ -63,7 +81,7 @@ class BrandViewSet(CommonModelViewSet):
 class SubCategoryViewSet(CommonModelViewSet):
     queryset = SubCategory.objects.all()
     serializer_class = SubCategorySerializer
-    
+
 
 class CategoryViewSet(CommonModelViewSet):
     queryset = Category.objects.all()
@@ -134,5 +152,74 @@ class WarehouseViewset(ModelViewSet):
     http_method_names = ['get', 'post', 'put', 'delete']
 
 
-class BarcodeViewset(ModelViewSet):
-    pass
+class BarcodeViewSet(ModelViewSet):
+    queryset = Barcode.objects.all()
+    serializer_class = BarcodeSerializer
+
+    def create(self, request, *args, **kwargs):
+        product_infromation = request.data.get("information")
+        get_current_product = Product.objects.get(id=product_infromation)
+        get_current_product_code = get_current_product.product_code
+        if not get_current_product_code:
+            # print(product_infromation.product_code)
+            return Response(
+                {"error": "Product code is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        barcode_class = barcode.get_barcode_class("code128")
+        code = barcode_class(get_current_product_code, writer=ImageWriter())
+
+        unique_filename = f"barcode_{uuid.uuid4()}"
+
+        directory_path = "barcode-image/"
+        if not os.path.exists(directory_path):
+            os.makedirs(directory_path)
+        barcode_image = code.save(f"barcode-image/{unique_filename}")
+
+        serializer = BarcodeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(barcode_image=barcode_image)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return GetBarcodeSerializer
+        return super().get_serializer_class()
+
+
+class PurchaseViewSet(ModelViewSet):
+    queryset = Purchase.objects.all()
+    serializer_class = PurchaseSerializer
+
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return GetPurachseSerializer
+        return super().get_serializer_class()
+
+
+class SalesViewSet(ModelViewSet):
+    queryset = Sales.objects.all()
+    serializer_class = SalesSerializer
+
+
+class PurchaseInvoiceViewSet(ModelViewSet):
+    queryset = PurchaseInvoice.objects.all()
+    serializer_class = PurchaseInvoiceSerializer
+
+class AdjustmentViewset(ModelViewSet):
+    queryset = Adjustment.objects.all()
+    serializer_class = AdjustmentSerializer
+
+    def create(self, request):
+        serializer = AdjustmentSerializer(data = request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.validated_data.pop('quantity')
+        adjustment = Adjustment.objects.create(**serializer.validated_data)
+        serializer = AdjustmentSerializer(adjustment)
+        return Response({"data" : serializer.data}) 
+    
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return GetAdjustmentSeralizer
+        return super().get_serializer_class()
