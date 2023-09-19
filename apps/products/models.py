@@ -26,7 +26,7 @@ class Brand(CommonInfo):
         return self.brand_name
 
 
-class Category(models.Model):
+class Category(CommonInfo):
 
     name = models.CharField(max_length=64)
 
@@ -38,7 +38,7 @@ class Category(models.Model):
         return self.name
 
 
-class SubCategory(models.Model):
+class SubCategory(CommonInfo):
 
     name = models.CharField(max_length=64)
     category = models.ForeignKey(
@@ -82,7 +82,8 @@ class Product(CommonInfo):
     )
     product_code = models.IntegerField()
     brand = models.ForeignKey(
-        Brand, on_delete=models.CASCADE, related_name="brand")
+        Brand, on_delete=models.CASCADE, related_name="brand"
+    )
     barcode = models.CharField(max_length=100)
     product_unit = models.ForeignKey(
         Unit, on_delete=models.CASCADE, related_name="product_unit"
@@ -121,7 +122,7 @@ class Product(CommonInfo):
 
 
 class Barcode(CommonInfo):
-    information = models.OneToOneField(
+    product = models.OneToOneField(
         Product, on_delete=models.CASCADE, related_name="barcode_info"
     )
     papersize = models.CharField(choices=BARCODE_PAPER_SIZE, max_length=20)
