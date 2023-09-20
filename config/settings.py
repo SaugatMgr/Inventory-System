@@ -175,3 +175,7 @@ EMAIL_USE_TLS = True
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_HOST_USER = config('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+
+# code names for supplier and biller
+SUPPLIER_CODE = config("BILLER_CODE")
+BILLER_CODE = config("BILLER_CODE")
