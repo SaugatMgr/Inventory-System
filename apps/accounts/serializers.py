@@ -1,4 +1,3 @@
-import random
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
@@ -174,7 +173,6 @@ class ChangePasswordSerializer(serializers.ModelSerializer):
         return attrs
 
 
-# serializers.py
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255, required=True)
 
