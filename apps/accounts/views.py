@@ -15,7 +15,6 @@ from rest_framework.permissions import (
     IsAdminUser,
 )
 
-
 from apps.accounts.models import (
     User,
     Customer,
@@ -45,7 +44,7 @@ from utils.permissions import (
     IsSupplierPermission,
 )
 from utils.send_otp_to_email import send_otp_email
-
+from django.conf import settings
 
 class CommonModelViewset(ModelViewSet):
     pagination_class = MyPagination
@@ -201,7 +200,7 @@ class SupplierViewSet(CommonModelViewset):
         return super().get_serializer_class()
 
     def create(self, request):
-        request.data["supplier_code"] = f"SC-{Supplier.objects.count()}"
+        request.data["supplier_code"] = f"{settings.SUPPLIER_CODE}-{Supplier.objects.count()}"
         serializers = SupplierSerializer(data=request.data)
         serializers.is_valid(raise_exception=True)
         serializers.save(created_by=request.user)
@@ -238,7 +237,7 @@ class BillerViewSet(CommonModelViewset):
         return super().get_serializer_class()
 
     def create(self, request):
-        request.data["biller_code"] = f"BC-{Biller.objects.count()}"
+        request.data["biller_code"] = f"{settings.BILLER_CODE}-{Biller.objects.count()}"
         serializers = BillerSerializer(data=request.data)
         serializers.is_valid(raise_exception=True)
         serializers.save(created_by=request.user)
