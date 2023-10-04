@@ -1,6 +1,7 @@
 from django.db import models
 import uuid
 
+
 class CommonInfo(models.Model):
     id = models.UUIDField(primary_key=True, editable=False, default=uuid.uuid4)
     created_by = models.ForeignKey(
@@ -22,12 +23,13 @@ class CommonInfo(models.Model):
 
     class Meta:
         abstract = True
-        
+
+
 class Address(models.Model):
     country = models.CharField(max_length=50, default="Nepal")
-    city = models.CharField(max_length=50, blank=False, default="Kathmandu")
-    street = models.CharField(max_length=50,blank=True, null=True)
-    zip_code = models.IntegerField(blank=True, null=True)
-    
+    city = models.CharField(max_length=50, default="Kathmandu")
+    address = models.CharField(max_length=50, blank=True, null=True)
+    zip_code = models.CharField(blank=True, null=True, max_length=10)
+
     class Meta:
-        abstract=True
+        abstract = True
