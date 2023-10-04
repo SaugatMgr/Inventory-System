@@ -1,11 +1,11 @@
-from django.shortcuts import get_object_or_404
-from rest_framework.viewsets import ModelViewSet
-from rest_framework import generics
-from rest_framework.response import Response
+from django.contrib.auth.hashers import make_password
 from rest_framework import status
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
+from rest_framework.response import Response
+from rest_framework.viewsets import ModelViewSet
+from django.db import transaction
+from django.shortcuts import get_object_or_404
 
 from rest_framework.permissions import (
     AllowAny,
@@ -20,31 +20,26 @@ from apps.accounts.models import (
     Customer,
     Supplier,
     Biller,
-    Warehouse,
+    # Warehouse,
+    OTP,
 )
 from apps.accounts.serializers import (
     UserSerializer,
-    GetUserListSerializer,
     SupplierSerializer,
     GetSupplierSerializer,
     CustomerSerializer,
     GetCustomerSerializer,
     BillerSerializer,
     GetBillerSerializer,
-    WarehouseSerializer,
-    RegisterSerializer,
+    # WarehouseSerializer,
     ChangePasswordSerializer,
     PasswordResetRequestSerializer,
     ForgotPasswordSerializer,
 )
 from apps.accounts.pagination import MyPagination
-from apps.accounts.utils import generate_otp
-
-from utils.permissions import (
-    IsSupplierPermission,
-)
 from utils.send_otp_to_email import send_otp_email
 from django.conf import settings
+
 
 class CommonModelViewset(ModelViewSet):
     pagination_class = MyPagination
@@ -53,8 +48,6 @@ class CommonModelViewset(ModelViewSet):
 class UserViewSet(CommonModelViewset):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ["full_name", ]
 
     permission_classes_by_action = {
         "list": [IsAuthenticated],
@@ -62,6 +55,10 @@ class UserViewSet(CommonModelViewset):
         "retrieve": [IsAdminUser],
         "patch": [IsAdminUser],
         "destroy": [IsAdminUser],
+        "register": [AllowAny],
+        "change_password": [IsAuthenticated],
+        "forgot_password": [AllowAny],
+        "reset_password": [AllowAny],
     }
 
     def get_permissions(self):
@@ -74,18 +71,27 @@ class UserViewSet(CommonModelViewset):
             return [permission() for permission in self.permission_classes]
 
     def get_serializer_class(self):
-        # if self.request.user.is_superuser and self.action == "list":
-        #     return GetUserListSerializer
+        if self.action == "register":
+            return UserSerializer
         if self.action == "change_password":
             return ChangePasswordSerializer
-        elif self.action == "forgot_password":
+        if self.action == "forgot_password":
             return PasswordResetRequestSerializer
-        elif self.action == "reset_password":
+        if self.action == "reset_password":
             return ForgotPasswordSerializer
         return super().get_serializer_class()
 
-    @action(permission_classes=[IsAuthenticated],
-            methods=['post'], url_path='change-password', detail=True)
+    @action(methods=["post"], url_path="register", detail=False)
+    def register(self, request, pk=None):
+        register_serializer = UserSerializer(data=request.data)
+        register_serializer.is_valid(raise_exception=True)
+        register_serializer.save()
+
+        return Response(
+            {"message": "User Registration Successful."}, status=status.HTTP_201_CREATED
+        )
+
+    @action(methods=["post"], url_path="change-password", detail=True)
     def change_password(self, request, pk=None):
         user = request.user
         serializer = ChangePasswordSerializer(data=request.data)
@@ -95,52 +101,79 @@ class UserViewSet(CommonModelViewset):
         password = serializer.validated_data["password"]
 
         if not request.user.check_password(old_password):
-            return Response({"message": "Old password is not correct"})
+            return Response({"message": "Old password is not correct."})
 
         if password is not None:
             user.set_password(password)
             user.save()
 
-        return Response({"success": ["Password reset successfully"]}, status=status.HTTP_200_OK)
-    
-    @action(methods=['post'], detail=False, url_path='forgot-password', permission_classes=[AllowAny])
-    
+        return Response(
+            {"message": "Password reset successfully."}, status=status.HTTP_200_OK
+        )
+
+    @action(
+        methods=["post"],
+        detail=False,
+        url_path="forgot-password",
+    )
     def forgot_password(self, request, pk=None):
         email_serializer = PasswordResetRequestSerializer(data=request.data)
+
         email_serializer.is_valid(raise_exception=True)
-        email = email_serializer.validated_data['email']
-
-        # getting the user after validating email
+        email = email_serializer.validated_data["email"]
         user = get_object_or_404(User, email=email)
-        otp = generate_otp()
-        user.otp = otp
-        user.save()
 
-        reset_password_url = f"http://127.0.0.1:8000/api/forgot-password/{user.id}/reset-password/"
+        otp = OTP.generate_otp(user=user)
 
-        send_otp_email(user.email, reset_password_url, otp)
+        send_otp_email(user.email, otp)
 
-        return Response({"success": "Email has been sent successfully", "data": {"email": user.id}}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"message": "OTP sent successfully."}, status=status.HTTP_200_OK
+        )
 
-    @action(methods=['post'], detail=True, url_path='reset-password', permission_classes=[AllowAny])
+    @action(
+        methods=["post"],
+        detail=True,
+        url_path="reset-password",
+    )
     def reset_password(self, request, pk=None):
-
-        user = get_object_or_404(User, id=pk)
+        user = self.get_object()
 
         forgot_password_serializer = ForgotPasswordSerializer(
-            data=request.data, context={'user': user})
+            data=request.data, context={"request": request}
+        )
+
         forgot_password_serializer.is_valid(raise_exception=True)
-        password = forgot_password_serializer.validated_data['password']
+        password = forgot_password_serializer.validated_data["password"]
 
         user.set_password(password)
         user.save()
 
-        # return success response after updating the password
-        return Response({"success": "Password reset successful"}, status=status.HTTP_202_ACCEPTED)
+        return Response(
+            {"message": "Password reset successfully."}, status=status.HTTP_200_OK
+        )
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        password = data.get("password")
+        confirm_password = data.get("confirm_password")
+
+        if password != confirm_password:
+            raise ValidationError({"password": "The two password fields do not match."})
+
+        data.pop("confirm_password", None)
+        data["password"] = make_password(password)
+
+        user_serializer = UserSerializer(data=data)
+        user_serializer.is_valid(raise_exception=True)
+        user_serializer.save()
+
+        return Response(
+            {"message": "User Registration Successful."}, status=status.HTTP_201_CREATED
+        )
 
     def update(self, instance, validated_data):
-
-        instance.set_password(validated_data['password'])
+        instance.set_password(validated_data["password"])
         instance.save()
 
         return instance
@@ -172,6 +205,26 @@ class CustomerViewSet(CommonModelViewset):
             return GetCustomerSerializer
         return super().get_serializer_class()
 
+    def create(self, request):
+        request.data["user"]["role"] = "Customer"
+
+        user_serializer = UserSerializer(data=request.data["user"])
+        customer_serializer = self.get_serializer(data=request.data)
+
+        user_serializer.is_valid(raise_exception=True)
+        customer_serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            user = user_serializer.save()
+            customer_serializer.save(user=user)
+
+        response_data = {
+            "message": "Customer created successfully",
+            "data": customer_serializer.data,
+        }
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
 
 class SupplierViewSet(CommonModelViewset):
     queryset = Supplier.objects.all()
@@ -180,7 +233,7 @@ class SupplierViewSet(CommonModelViewset):
     permission_classes_by_action = {
         "list": [IsAuthenticated],
         "create": [IsAdminUser],
-        "retrieve": [IsAdminUser | IsSupplierPermission],
+        "retrieve": [IsAdminUser],
         "patch": [IsAdminUser],
         "destroy": [IsAdminUser],
     }
@@ -200,19 +253,32 @@ class SupplierViewSet(CommonModelViewset):
         return super().get_serializer_class()
 
     def create(self, request):
-        request.data["supplier_code"] = f"{settings.SUPPLIER_CODE}-{Supplier.objects.count()}"
-        serializers = SupplierSerializer(data=request.data)
-        serializers.is_valid(raise_exception=True)
-        serializers.save(created_by=request.user)
-        return Response(serializers.data, status=status.HTTP_201_CREATED)
+        request.data["user"]["role"] = "Supplier"
+
+        user_serializer = UserSerializer(data=request.data["user"])
+        supplier_serializer = self.get_serializer(data=request.data)
+
+        user_serializer.is_valid(raise_exception=True)
+        supplier_serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            user = user_serializer.save()
+            supplier_serializer.save(
+                user=user,
+                supplier_code=f"{settings.SUPPLIER_CODE}{Supplier.objects.count()}",
+            )
+
+        response_data = {
+            "message": "Supplier created successfully",
+            "data": supplier_serializer.data,
+        }
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 class BillerViewSet(CommonModelViewset):
     queryset = Biller.objects.all()
     serializer_class = BillerSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter,]
-    filterset_fields = ["user", ]
-    search_fields = ['user__full_name']
 
     permission_classes_by_action = {
         "list": [IsAuthenticated],
@@ -237,53 +303,23 @@ class BillerViewSet(CommonModelViewset):
         return super().get_serializer_class()
 
     def create(self, request):
-        request.data["biller_code"] = f"{settings.BILLER_CODE}-{Biller.objects.count()}"
-        serializers = BillerSerializer(data=request.data)
-        serializers.is_valid(raise_exception=True)
-        serializers.save(created_by=request.user)
-        return Response(serializers.data, status=status.HTTP_201_CREATED)
+        request.data["user"]["role"] = "Biller"
 
+        user_serializer = UserSerializer(data=request.data["user"])
+        biller_serializer = self.get_serializer(data=request.data)
 
-class WarehouseViewSet(CommonModelViewset):
-    queryset = Warehouse.objects.all()
-    serializer_class = WarehouseSerializer
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['^name']
-    ordering_fields = ['name', 'email']
+        user_serializer.is_valid(raise_exception=True)
+        biller_serializer.is_valid(raise_exception=True)
 
-    permission_classes_by_action = {
-        "list": [IsAuthenticated],
-        "create": [IsAdminUser],
-        "retrieve": [IsAdminUser],
-        "patch": [IsAdminUser],
-        "destroy": [IsAdminUser],
-    }
+        with transaction.atomic():
+            user = user_serializer.save()
+            biller_serializer.save(
+                user=user, biller_code=f"{settings.BILLER_CODE}{Biller.objects.count()}"
+            )
 
-    def get_permissions(self):
-        try:
-            return [
-                permission()
-                for permission in self.permission_classes_by_action[self.action]
-            ]
-        except:
-            return [permission() for permission in self.permission_classes]
+        response_data = {
+            "message": "Biller created successfully",
+            "data": biller_serializer.data,
+        }
 
-
-
-
-class ForgotPasswordViewSet(ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = PasswordResetRequestSerializer
-    permission_classes = [AllowAny]
-
-    def get_serializer_class(self):
-        if self.action == "reset_password":
-            return ForgotPasswordSerializer
-        return super().get_serializer_class()
-
-
-
-class RegisterUserViewSet(generics.CreateAPIView):
-    queryset = User.objects.all()
-    permission_classes = [AllowAny,]
-    serializer_class = RegisterSerializer
+        return Response(response_data, status=status.HTTP_201_CREATED)
