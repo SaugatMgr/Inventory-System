@@ -1,20 +1,19 @@
+import pyotp
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 from django.contrib.auth.password_validation import validate_password
 from apps.accounts.models import (
+    OTP,
     User,
     Customer,
     Biller,
     Supplier,
-    Warehouse,
+    # Warehouse,
 )
 
 
 class UserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(
-        write_only=True, required=True, validators=[validate_password], style={"input_type": "password"})
-    password2 = serializers.CharField(write_only=True, required=True, style={
-                                      "input_type": "password"})
+    confirm_password = serializers.CharField(write_only=True, required=False)
 
     class Meta:
         model = User
@@ -25,48 +24,35 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "username",
             "gender",
-            "role",
+            "country",
+            "city",
+            "address",
+            "zip_code",
             "password",
-            "password2",
+            "confirm_password",
         )
-
-    def validate(self, data):
-        if data['password'] != data['password2']:
-            raise serializers.ValidationError(
-                {
-                    "password": "The two password fields did not match"
-                }
-            )
-        return data
-
-    def create(self, validated_data):
-        password = validated_data.pop('password', None)
-        validated_data.pop('password2', None)
-        user = User.objects.create(**validated_data)
-        if password is not None:
-            user.set_password(password)
-        user.save()
-
-        return user
+        extra_kwargs = {"password": {"write_only": True}}
 
 
 class SupplierSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
 
     class Meta:
         model = Supplier
         fields = (
             "id",
             "user",
-            "supplier_code",
             "company",
         )
 
 
 class CustomerSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
 
     class Meta:
         model = Customer
         fields = (
+            "id",
             "user",
             "supplier_name",
             "customer_group",
@@ -75,6 +61,8 @@ class CustomerSerializer(serializers.ModelSerializer):
 
 
 class BillerSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+
     class Meta:
         model = Biller
         fields = (
@@ -82,32 +70,18 @@ class BillerSerializer(serializers.ModelSerializer):
             "user",
             "NID",
             "warehouse",
-            "biller_code"
         )
 
 
-class WarehouseSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Warehouse
-        fields = fields = (
-            "id",
-            "name",
-            "phone",
-            "email",
-        )
-
-
-class GetUserListSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = (
-            "id",
-            "full_name",
-            "phone",
-            "email",
-            "username",
-            "gender",
-        )
+# class WarehouseSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Warehouse
+#         fields = (
+#             "id",
+#             "name",
+#             "phone",
+#             "email",
+#         )
 
 
 class GetSupplierSerializer(serializers.ModelSerializer):
@@ -125,54 +99,31 @@ class GetSupplierSerializer(serializers.ModelSerializer):
 
 class GetBillerSerializer(serializers.ModelSerializer):
     user = UserSerializer()
-    modified_by = UserSerializer()
-    warehouse = WarehouseSerializer()
+    # warehouse = WarehouseSerializer()
 
     class Meta:
         model = Biller
         fields = (
             "id",
             "user",
-            "modified_by",
             "biller_code",
             "NID",
-            "warehouse",
-            "country",
-            "city",
-            "street",
-            "zip_code"
+            # "warehouse",
         )
 
 
 class GetCustomerSerializer(serializers.ModelSerializer):
-    supplier_name = GetSupplierSerializer()
+    user = UserSerializer()
 
     class Meta:
         model = Customer
         fields = (
+            "id",
+            "user",
             "supplier_name",
             "customer_group",
             "reward_point",
         )
-
-
-class ChangePasswordSerializer(serializers.ModelSerializer):
-    old_password = serializers.CharField(
-        write_only=True, required=True, style={"input_type": "password"})
-    password = serializers.CharField(
-        write_only=True, required=True, validators=[validate_password], style={"input_type": "password"})
-    password2 = serializers.CharField(write_only=True, required=True, style={
-                                      "input_type": "password"})
-
-    class Meta:
-        model = User
-        fields = ('old_password', 'password', 'password2')
-
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError(
-                {"password": "Password fields didn't match."})
-        return attrs
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
@@ -180,28 +131,25 @@ class PasswordResetRequestSerializer(serializers.Serializer):
 
 
 class ChangePasswordSerializer(serializers.ModelSerializer):
-    old_password = serializers.CharField(
-        max_length=255, write_only=True, style={"input_type": "password"})
-    password = serializers.CharField(max_length=255, write_only=True, style={
-                                     "input_type": "password"})
-    password1 = serializers.CharField(max_length=255, write_only=True, style={
-                                      "input_type": "password"})
+    old_password = serializers.CharField(max_length=255, write_only=True)
+    password = serializers.CharField(max_length=255, write_only=True)
+    confirm_password = serializers.CharField(max_length=255, write_only=True)
 
     class Meta:
         model = User
-        fields = ['old_password', 'password', 'password1']
+        fields = ("old_password", "password", "confirm_password")
 
     def validate_old_password(self, value):
-        user = self.context['request'].user
+        user = self.context["request"].user
         if not user.check_password(value):
             raise serializers.ValidationError(
-                {"old password": "Sorry your old password doesn't match"})
+                {"old password": "Sorry your old password doesn't match"}
+            )
         return value
 
     def validate(self, data):
-        if data.get('password') != data.get('password1'):
-            raise serializers.ValidationError(
-                {"password": "Your password donot match"})
+        if data.get("password") != data.get("confirm_password"):
+            raise serializers.ValidationError({"password": "Your password donot match"})
         return data
 
     def update(self, instance, validated_data):
@@ -214,71 +162,38 @@ class EmailSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
 
     class Meta:
-        fields = ['email']
+        fields = ("email")
 
 
 class ForgotPasswordSerializer(serializers.ModelSerializer):
     otp = serializers.CharField()
-    password = serializers.CharField(
-        write_only=True, style={"input_type": "password"})
-    password1 = serializers.CharField(
-        write_only=True, style={"input_type": "password"})
+    password = serializers.CharField(write_only=True)
+    confirm_password = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
-        fields = ['otp', 'password', 'password1']
-
-    def validate_otp(self, value):
-        user = self.context['user']
-        if user.otp == value:
-            user.otp = None
-            return value
-        raise serializers.ValidationError("otp doesn't match")
+        fields = ["otp", "password", "confirm_password"]
 
     def validate(self, data):
-        if data.get('password') != data.get('password1'):
-            raise serializers.ValidationError('password do not match')
+        if data.get("password") != data.get("confirm_password"):
+            raise serializers.ValidationError({"message": "The two password fields do not match"})
         return data
 
+    def validate_otp(self, value):
+        
+        user = self.context["request"].user
 
-class RegisterSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(
-        required=True,
-        validators=[UniqueValidator(queryset=User.objects.all())]
-    )
+        try:
+            otp_obj = OTP.objects.get(user=user)
+        except OTP.DoesNotExist:
+            raise serializers.ValidationError("OTP not found.")
 
-    password = serializers.CharField(
-        write_only=True, required=True, validators=[validate_password], style={"input_type": "password"})
-    password2 = serializers.CharField(
-        write_only=True, required=True, style={"input_type": "password"})
+        secret_key = otp_obj.secret_key
 
-    class Meta:
-        model = User
-        fields = (
-            "id",
-            "full_name",
-            "phone",
-            "email",
-            "username",
-            "gender",
-            "role",
-            "password",
-            "password2",
-        )
-
-    def validate(self, attrs):
-        if attrs['password'] != attrs['password2']:
-            raise serializers.ValidationError(
-                {"password": "Password fields didn't match."})
-
-        return attrs
-
-    def create(self, validated_data):
-        password = validated_data.pop('password', None)
-        validated_data.pop('password2', None)
-        user = User.objects.create(**validated_data)
-        if password is not None:
-            user.set_password(password)
-        user.save()
-
-        return user
+        otp_instance = pyotp.TOTP(secret_key)
+        
+        if otp_instance.verify(value, valid_window=3):
+            otp_obj.delete()
+        else:
+            otp_obj.delete()
+            raise serializers.ValidationError("Invalid OTP.")
